@@ -15,14 +15,14 @@ limitations under the License."""
 import os
 from smtplib import SMTP
 from socket import gethostname
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEText import MIMEText
-from email.MIMEImage import MIMEImage
-from httplib import HTTPConnection
-from urlparse import urlsplit
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from six.moves.http_client import HTTPConnection
+from six.moves.urllib.parse import urlsplit
 from time import ctime, strftime
 from traceback import format_exc
-from graphite.util import getProfile
+from graphite.user_util import getProfile
 from graphite.logger import log
 from graphite.account.models import MyGraph
 
@@ -100,7 +100,10 @@ def send_email(request):
     if query: path += '?' + query
     conn = HTTPConnection(server)
     conn.request('GET',path)
-    resp = conn.getresponse()
+    try: # Python 2.7+, use buffering of HTTP responses
+      resp = conn.getresponse(buffering=True)
+    except TypeError:  # Python 2.6 and older
+      resp = conn.getresponse()
     assert resp.status == 200, "Failed HTTP response %s %s" % (resp.status, resp.reason)
     rawData = resp.read()
     conn.close()

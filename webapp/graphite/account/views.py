@@ -13,10 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License."""
 
 from django.contrib.auth import authenticate, login, logout
-from django.core.urlresolvers import reverse
+try:
+    from django.urls import reverse
+except ImportError:  # Django < 1.10
+    from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
-from graphite.util import getProfile
+from graphite.user_util import getProfile, isAuthenticated
 
 
 def loginView(request):
@@ -44,7 +47,7 @@ def logoutView(request):
   return HttpResponseRedirect(nextPage)
 
 def editProfile(request):
-  if not request.user.is_authenticated():
+  if not isAuthenticated(request.user):
     return HttpResponseRedirect(reverse('browser'))
   context = { 'profile' : getProfile(request) }
   return render_to_response("editProfile.html",context)

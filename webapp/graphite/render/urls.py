@@ -12,13 +12,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License."""
 
-from django.conf.urls import patterns, url
+from django.conf.urls import url
 from . import views
 
-urlpatterns = patterns(
-    '',
-    url('local/?$', views.renderLocalView, name='render_local'),
-    url('~(?P<username>[^/]+)/(?P<graphName>[^/]+)/?',
-        views.renderMyGraphView, name='render_my_graph'),
-    url('', views.renderView, name='render'),
-)
+urlpatterns = [
+    url(r'^/local/?$', views.renderLocalView, name='render_local'),
+    url(r'^/~(?P<username>[^/]+)/(?P<graphName>[^/]+)/?$', views.renderMyGraphView,
+        name='render_my_graph'),
+    url(r'^/?$', views.renderView, name='render'),
+]

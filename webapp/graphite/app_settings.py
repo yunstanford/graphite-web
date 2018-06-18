@@ -15,19 +15,40 @@ limitations under the License."""
 # Django settings for graphite project.
 # DO NOT MODIFY THIS FILE DIRECTLY - use local_settings.py instead
 from os.path import dirname, join, abspath
-
-TEMPLATE_DIRS = (
-  join(dirname( abspath(__file__) ), 'templates'),
-)
+from django import VERSION as DJANGO_VERSION
+try:
+    import raven
+except ImportError:
+    raven = None
 
 #Django settings below, do not touch!
 APPEND_SLASH = False
 TEMPLATE_DEBUG = False
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+
+SILENCED_SYSTEM_CHECKS = ['urls.W002']
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [
+            join(dirname( abspath(__file__) ), 'templates')
+        ],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                # Insert your TEMPLATE_CONTEXT_PROCESSORS here or use this
+                # list if you haven't customized them:
+                'django.contrib.auth.context_processors.auth',
+                'django.template.context_processors.debug',
+                'django.template.context_processors.i18n',
+                'django.template.context_processors.media',
+                'django.template.context_processors.static',
+                'django.template.context_processors.tz',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
     },
-}
+]
 
 # Language code for this installation. All choices can be found here:
 # http://www.w3.org/TR/REC-html40/struct/dirlang.html#langcodes
@@ -41,7 +62,7 @@ MEDIA_ROOT = ''
 # Example: "http://media.lawrence.com"
 MEDIA_URL = ''
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = (
   'graphite.middleware.LogExceptionsMiddleware',
   'django.middleware.common.CommonMiddleware',
   'django.middleware.gzip.GZipMiddleware',
@@ -49,19 +70,26 @@ MIDDLEWARE_CLASSES = (
   'django.contrib.auth.middleware.AuthenticationMiddleware',
   'django.contrib.messages.middleware.MessageMiddleware',
 )
+# SessionAuthenticationMiddleware is enabled by default since 1.10 and
+# deprecated since 2.0
+if DJANGO_VERSION < (1, 10):
+    MIDDLEWARE_CLASSES = MIDDLEWARE + \
+        ('django.contrib.auth.middleware.SessionAuthenticationMiddleware',)
 
 ROOT_URLCONF = 'graphite.urls'
 
 INSTALLED_APPS = (
-  'graphite.metrics',
-  'graphite.render',
+  'graphite.account',
   'graphite.browser',
   'graphite.composer',
-  'graphite.account',
   'graphite.dashboard',
-  'graphite.whitelist',
   'graphite.events',
+  'graphite.functions',
+  'graphite.metrics',
+  'graphite.render',
+  'graphite.tags',
   'graphite.url_shortener',
+  'graphite.whitelist',
   'django.contrib.auth',
   'django.contrib.sessions',
   'django.contrib.admin',
@@ -69,6 +97,9 @@ INSTALLED_APPS = (
   'django.contrib.staticfiles',
   'tagging',
 )
+if raven is not None:
+    INSTALLED_APPS = INSTALLED_APPS + ('raven.contrib.django.raven_compat',)
+
 
 AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend']
 

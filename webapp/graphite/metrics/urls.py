@@ -12,17 +12,16 @@ You may obtain a copy of the License at
    See the License for the specific language governing permissions and
    limitations under the License."""
 
-from django.conf.urls import patterns, url
+from django.conf.urls import url
 from . import views
 
-urlpatterns = patterns(
-    '',
-    url('^index\.json$', views.index_json, name='metrics_index'),
-    url('^find/?$', views.find_view, name='metrics_find'),
-    url('^expand/?$', views.expand_view, name='metrics_expand'),
-    url('^get-metadata/?$', views.get_metadata_view,
+urlpatterns = [
+    url(r'^/index\.json$', views.index_json, name='metrics_index'),
+    url(r'^/find/?$', views.find_view, name='metrics_find'),
+    url(r'^/expand/?$', views.expand_view, name='metrics_expand'),
+    url(r'^/get-metadata/?$', views.get_metadata_view,
         name='metrics_get_metadata'),
-    url('^set-metadata/?$', views.set_metadata_view,
+    url(r'^/set-metadata/?$', views.set_metadata_view,
         name='metrics_set_metadata'),
-    url('', views.find_view, name='metrics'),
-)
+    url(r'^/?$', views.find_view, name='metrics'),
+]

@@ -13,20 +13,21 @@ See the License for the specific language governing permissions and
 limitations under the License."""
 
 import math, itertools, re
+from datetime import datetime, timedelta
+from six.moves import range, zip
+from six.moves.urllib.parse import unquote_plus
+from six.moves.configparser import SafeConfigParser
+from django.conf import settings
+import pytz
+import six
+
+from graphite.render.datalib import TimeSeries
+from graphite.util import json, BytesIO
+
 try:
     import cairocffi as cairo
 except ImportError:
     import cairo
-
-import StringIO
-from datetime import datetime, timedelta
-from urllib import unquote_plus
-from ConfigParser import SafeConfigParser
-from django.conf import settings
-from graphite.render.datalib import TimeSeries
-from graphite.util import json
-
-import pytz
 
 INFINITY = float('inf')
 
@@ -289,14 +290,14 @@ class _AxisTics:
       return "%g %s" % (float(value), prefix)
     elif value < 1.0:
       return "%.2f %s" % (float(value), prefix)
-    if span > 10 or spanPrefix != prefix:
+    if (span is not None and span > 10) or spanPrefix != prefix:
       if type(value) is float:
         return "%.1f %s" % (value, prefix)
       else:
         return "%d %s" % (int(value), prefix)
-    elif span > 3:
+    elif span is not None and span > 3:
       return "%.1f %s" % (float(value), prefix)
-    elif span > 0.1:
+    elif span is not None and span > 0.1:
       return "%.2f %s" % (float(value), prefix)
     else:
       return "%g %s" % (float(value), prefix)
@@ -420,7 +421,6 @@ class _LinearAxisTics(_AxisTics):
 
     bestSlop = None
     bestStep = None
-    bestDivisor = None
     for step in self.generateSteps(variance / float(max(divisors))):
       if bestSlop is not None and step * min(divisors) >= 2 * bestSlop + variance:
         break
@@ -429,7 +429,6 @@ class _LinearAxisTics(_AxisTics):
         if slop is not None and (bestSlop is None or slop < bestSlop):
           bestSlop = slop
           bestStep = step
-          bestDivisor = divisor
 
     self.step = bestStep
 
@@ -580,10 +579,10 @@ class Graph:
     if outputFormat == 'png':
       self.surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
     elif outputFormat == 'svg':
-      self.surfaceData = StringIO.StringIO()
+      self.surfaceData = BytesIO()
       self.surface = cairo.SVGSurface(self.surfaceData, self.width, self.height)
     elif outputFormat == 'pdf':
-      self.surfaceData = StringIO.StringIO()
+      self.surfaceData = BytesIO()
       self.surface = cairo.PDFSurface(self.surfaceData, self.width, self.height)
       res_x, res_y = self.surface.get_fallback_resolution()
       self.width = float(self.width / res_x) * 72
@@ -596,7 +595,7 @@ class Graph:
       r,g,b = value
     elif value in colorAliases:
       r,g,b = colorAliases[value]
-    elif type(value) in (str,unicode) and len(value) >= 6:
+    elif isinstance(value, six.string_types) and len(value) >= 6:
       s = value
       if s[0] == '#': s = s[1:]
       if s[0:3] == '%23': s = s[3:]
@@ -727,7 +726,7 @@ class Graph:
       numberOfLines = max(len(elements) - numRight, numRight)
       columns = math.floor(columns / 2.0)
       if columns < 1: columns = 1
-      legendHeight = max(1, (numberOfLines / columns)) * (lineHeight + padding)
+      legendHeight = (max(1, (numberOfLines / columns)) * lineHeight) + padding
       self.area['ymax'] -= legendHeight #scoot the drawing area up to fit the legend
       self.ctx.set_line_width(1.0)
       x = self.area['xmin']
@@ -768,7 +767,7 @@ class Graph:
       columns = math.floor( self.width / labelWidth )
       if columns < 1: columns = 1
       numberOfLines = math.ceil( float(len(elements)) / columns )
-      legendHeight = numberOfLines * (lineHeight + padding)
+      legendHeight = (numberOfLines * lineHeight) + padding
       self.area['ymax'] -= legendHeight #scoot the drawing area up to fit the legend
       self.ctx.set_line_width(1.0)
       x = self.area['xmin']
@@ -884,7 +883,7 @@ class Graph:
         metaData = { }
 
       self.surface.finish()
-      svgData = self.surfaceData.getvalue()
+      svgData = str(self.surfaceData.getvalue())
       self.surfaceData.close()
 
       svgData = svgData.replace('pt"', 'px"', 2) # we expect height/width in pixels, not points
@@ -907,13 +906,13 @@ class Graph:
           svgData += "</g>"
         svgData = svgData.replace(' data-header="true"','')
 
-      fileObj.write(svgData)
-      fileObj.write("""<script>
+      fileObj.write(svgData.encode('utf-8'))
+      fileObj.write(("""<script>
   <![CDATA[
     metadata = %s
   ]]>
 </script>
-</svg>""" % json.dumps(metaData))
+</svg>""" % json.dumps(metaData)).encode('utf-8'))
 
 
 class LineGraph(Graph):
@@ -987,8 +986,8 @@ class LineGraph(Graph):
     if 'yUnitSystem' not in params:
       params['yUnitSystem'] = 'si'
     else:
-      params['yUnitSystem'] = unicode(params['yUnitSystem']).lower()
-      if params['yUnitSystem'] not in UnitSystems.keys():
+      params['yUnitSystem'] = six.text_type(params['yUnitSystem']).lower()
+      if params['yUnitSystem'] not in UnitSystems:
         params['yUnitSystem'] = 'si'
 
     self.params = params
@@ -1039,18 +1038,18 @@ class LineGraph(Graph):
 
     for series in self.data:
       if not hasattr(series, 'color'):
-        series.color = self.colors.next()
+        series.color = next(self.colors)
 
     titleSize = self.defaultFontParams['size'] + math.floor( math.log(self.defaultFontParams['size']) )
     self.setFont( size=titleSize )
     self.setColor( self.foregroundColor )
 
     if params.get('title'):
-      self.drawTitle( unicode(params['title']) )
+      self.drawTitle( six.text_type( unquote_plus(params['title']) ) )
     if params.get('vtitle'):
-      self.drawVTitle( unicode(params['vtitle']) )
+      self.drawVTitle( six.text_type( unquote_plus(params['vtitle']) ) )
     if self.secondYAxis and params.get('vtitleRight'):
-      self.drawVTitle( unicode(params['vtitleRight']), rightAlign=True )
+      self.drawVTitle( six.text_type( unquote_plus(params['vtitleRight']) ), rightAlign=True )
     self.setFont()
 
     if not params.get('hideLegend', len(self.data) > settings.LEGEND_MAX_ITEMS):
@@ -1769,6 +1768,14 @@ class PieGraph(Graph):
     self.pieLabels = params.get('pieLabels', 'horizontal')
     self.total = sum( [t[1] for t in self.data] )
 
+    if not self.data:
+      x = self.width / 2
+      y = self.height / 2
+      self.setColor('red')
+      self.setFont(size=math.log(self.width * self.height) )
+      self.drawText("No Data", x, y, align='center')
+      return
+
     if self.params.get('areaAlpha'):
       try:
         self.alpha = float(self.params['areaAlpha'])
@@ -1784,7 +1791,7 @@ class PieGraph(Graph):
         'name' : name,
         'value' : value,
         'percent' : value / self.total,
-        'color' : self.colors.next(),
+        'color' : next(self.colors),
         'alpha' : self.alpha,
       })
 
@@ -1792,12 +1799,13 @@ class PieGraph(Graph):
     self.setFont( size=titleSize )
     self.setColor( self.foregroundColor )
     if params.get('title'):
-      self.drawTitle( params['title'] )
+      self.drawTitle( unquote_plus(params['title']) )
     self.setFont()
 
     if not params.get('hideLegend',False):
       elements = [ (slice['name'],slice['color'],None) for slice in self.slices ]
-      self.drawLegend(elements)
+      if len(elements) > 0:
+        self.drawLegend(elements)
 
     self.drawSlices()
 
@@ -1843,8 +1851,7 @@ class PieGraph(Graph):
         if slice['value'] < 10 and slice['value'] != int(slice['value']):
           label = "%.2f" % slice['value']
         else:
-          label = unicode(int(slice['value']))
-      extents = self.getExtents(label)
+          label = six.text_type(int(slice['value']))
       theta = slice['midAngle']
       x = self.x0 + (self.radius / 2.0 * math.cos(theta))
       y = self.y0 + (self.radius / 2.0 * math.sin(theta))
@@ -1923,7 +1930,7 @@ def dataLimits(data, drawNullAsZero=False, stacked=False):
     length = safeMin(len(series) for series in finiteData)
     sumSeries = []
 
-    for i in xrange(0, length):
+    for i in range(0, length):
       sumSeries.append( safeSum(series[i] for series in finiteData) )
     yMaxValue = safeMax( sumSeries )
   else:
@@ -1963,13 +1970,13 @@ def format_units(v, step=None, system='si', units=None):
     if condition(size):
       v2 = v / size
       if (v2 - math.floor(v2)) < 0.00000000001 and v > 1:
-        v2 = math.floor(v2)
+        v2 = float(math.floor(v2))
       if units:
         prefix = "%s%s" % (prefix, units)
       return v2, prefix
 
   if (v - math.floor(v)) < 0.00000000001 and v > 1 :
-    v = math.floor(v)
+    v = float(math.floor(v))
   if units:
     prefix = units
   else:

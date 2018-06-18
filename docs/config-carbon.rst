@@ -49,6 +49,7 @@ Frequencies and histories are specified using the following suffixes:
 * m - minute
 * h - hour
 * d - day
+* w - week
 * y - year
 
 
@@ -98,6 +99,8 @@ This file defines how to aggregate data to lower-precision retentions.  The form
 Important notes before continuing:
 
 * This file is optional.  If it is not present, defaults will be used.
+* The sections are applied in order from the top (first) and bottom (last), similar to ``storage-schemas.conf``.
+* The first pattern that matches the metric name is used, similar to ``storage-schemas.conf``.
 * There is no ``retentions`` line.  Instead, there are ``xFilesFactor`` and/or ``aggregationMethod`` lines.
 * ``xFilesFactor`` should be a floating point number between 0 and 1, and specifies what fraction of the previous retention level's slots must have non-null values in order to aggregate to a non-null value.  The default is 0.5.
 * ``aggregationMethod`` specifies the function used to aggregate values for the next retention level.  Legal methods are ``average``, ``sum``, ``min``, ``max``, and ``last``. The default is ``average``.
@@ -121,6 +124,16 @@ The ``aggregationMethod`` line is saying that the aggregate function to use is `
 If either ``xFilesFactor`` or ``aggregationMethod`` is left out, the default value will be used.
 
 The aggregation parameters are kept separate from the retention parameters because the former depends on the type of data being collected and the latter depends on volume and importance.
+
+If you want to change aggregation methods for existing data, be sure that you update the whisper files as well.
+
+Example:
+
+.. code-block:: none
+
+  /opt/graphite/bin/whisper-set-aggregation-method.py /opt/graphite/storage/whisper/test.wsp max
+
+This example sets the aggregation for the test.wsp to max. (The location of the python script depends on your installation)
 
 
 relay-rules.conf
@@ -148,13 +161,20 @@ The form of each line in this file should be as follows:
 
   output_template (frequency) = method input_pattern
 
-This will capture any received metrics that match 'input_pattern'
+This will capture any received metrics that match ``input_pattern``
 for calculating an aggregate metric. The calculation will occur
-every 'frequency' seconds and the 'method' can specify 'sum' or
-'avg'. The name of the aggregate metric will be derived from
-'output_template' filling in any captured fields from 'input_pattern'.
-Any metric that will arrive to ``carbon-aggregator`` will proceed to its
-output untouched unless it is overridden by some rule.
+every ``frequency`` seconds using a valid ``method``. The name of the aggregate
+metric will be derived from ``output_template`` filling in any captured
+fields from ``input_pattern``. Any metric that will arrive to
+``carbon-aggregator`` will proceed to its output untouched unless it
+is overridden by some rule.
+
+Available aggregation methods are: ``sum``, ``avg``, ``min``, ``max``, ``p50``, ``p75``, ``p80``, ``p90``, ``p95``, ``p99``, ``p999``, and ``count`` - where ``p50`` means 50th percentile and ``p999`` means 99.9th percentile, etc.
+
+Care should be taken when using percentile aggregation methods because re-aggregation does not work the way you might_ expect_. The utility of percentile aggregation however means they are provided if you wish to use them.
+
+.. _might: https://www.vividcortex.com/blog/why-percentiles-dont-work-the-way-you-think
+.. _expect: https://grafana.com/blog/2016/03/03/25-graphite-grafana-and-statsd-gotchas/#aggregating.percentiles
 
 For example, if your metric naming scheme is:
 

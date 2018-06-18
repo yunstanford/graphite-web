@@ -89,7 +89,18 @@ Paths also support the following wildcards, which allows you to identify more th
   All wildcards apply only within a single path element.  In other words, they do not include or cross dots (``.``).
   Therefore, ``servers.*`` will not match ``servers.ix02ehssvc04v.cpu.total.user``, while ``servers.*.*.*.*`` will.
 
-  
+Tagged Series
+^^^^^^^^^^^^^
+
+When querying tagged series, we start with the `seriesByTag <functions.html#graphite.render.functions.seriesByTag>`_ function:
+
+.. code-block:: none
+
+    # find all series that have tag1 set to value1
+    seriesByTag('tag1=value1')
+
+See :ref:`querying tagged series <querying-tagged-series>` for more detail on using `seriesByTag <functions.html#graphite.render.functions.seriesByTag>`_.
+
 Examples
 ^^^^^^^^
 
@@ -122,6 +133,16 @@ You can also run any number of :doc:`functions </functions>` on the various metr
 
   &target=averageSeries(company.server*.applicationInstance.requestsHandled)
   (draws 1 aggregate line)
+
+Multiple function calls can be chained together either by nesting them or by piping the result into another function (it will be passed to the piped function as its first parameter):
+
+.. code-block:: none
+
+  &target=movingAverage(aliasByNode(company.server*.applicationInstance.requestsHandled,1),"5min")
+  &target=aliasByNode(company.server*.applicationInstance.requestsHandled,1)|movingAverage("5min")
+  &target=company.server*.applicationInstance.requestsHandled|aliasByNode(1)|movingAverage("5min")
+  &target=movingAverage(company.server*.applicationInstance.requestsHandled|aliasByNode(1),"5min")
+  (these are all equivalent)
 
 The target param can also be repeated to graph multiple related metrics.
 
@@ -163,7 +184,7 @@ mon            30 Days (month)
 y              365 Days (year)
 ============== ===============
 
-ABSOLUTE_TIME is in the format HH:MM_YYMMDD, YYYYMMDD, MM/DD/YY, or any other
+ABSOLUTE_TIME is in the format HH:MM_YYYYMMDD, YYYYMMDD, MM/DD/YY, or any other
 ``at(1)``-compatible time format.
 
 ============= =======
@@ -878,9 +899,11 @@ max
 
 maxDataPoints
 -------------
-Set the maximum numbers of datapoints returned when using json content. 
+Set the maximum numbers of datapoints for each series returned when using json content.
 
-If the number of datapoints in a selected range exceeds the maxDataPoints value then the datapoints over the whole period are consolidated.
+If for any output series the number of datapoints in a selected range exceeds the maxDataPoints value then the datapoints over the whole period are consolidated.
+
+The function used to consolidate points can be set using the `consolidateBy <functions.html#graphite.render.functions.consolidateBy>`_ function.
 
 .. _param-minorGridLineColor:
 
@@ -982,6 +1005,14 @@ One of:
   The maximum of non-null points in the series
 ``minimum``
   THe minimum of non-null points in the series
+
+.. _param-pretty:
+
+pretty
+------
+*Default: <unset>*
+
+If set to 1 and combined with ``format=json``, outputs human-friendly json.
 
 .. _param-rightColor:
 
@@ -1146,6 +1177,19 @@ Example:
 .. code-block:: none
 
   &width=650&height=250
+
+.. _param-xFilesFactor:
+
+xFilesFactor
+------------
+*Default: DEFAULT_XFILES_FACTOR specified in local_settings.py or 0*
+
+Sets the default `xFilesFactor` value used when performing runtime aggregation across multiple
+series and/or intervals.
+
+See the `xFilesFactor <functions.html#graphite.render.functions.setXFilesFactor>`_ function for
+more information on the `xFilesFactor` value and how the default can be overridden for specific
+targets or series.
 
 .. _param-xFormat:
 
